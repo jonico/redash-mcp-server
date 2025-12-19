@@ -45,6 +45,6 @@ jobs:
         with:
           name: k8s-test-logs
           path: |
-            /tmp/*.log
-            /tmp/deployment-test.yaml
+            /tmp/deployment-*.yaml
+          if-no-files-found: ignore
           retention-days: 7

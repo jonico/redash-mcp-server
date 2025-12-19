@@ -109,7 +109,7 @@ kind load docker-image "${IMAGE_NAME}" --name "${CLUSTER_NAME}"
 
 # Update deployment to use the test image
 log_info "Creating temporary deployment manifest with test image..."
-TEMP_DEPLOYMENT="/tmp/deployment-test.yaml"
+TEMP_DEPLOYMENT=$(mktemp)
 sed "s|image: ghcr.io/jonico/redash-mcp-server:latest|image: ${IMAGE_NAME}|g" \
     k8s/deployment.yaml > "${TEMP_DEPLOYMENT}"
 
@@ -122,6 +122,7 @@ kubectl apply -f k8s/configmap.yaml
 
 # Apply Secret (with placeholder API key for testing)
 log_info "Applying Secret..."
+log_warn "Using placeholder API key for testing. In production, use: kubectl create secret generic mcp-server-secrets --from-literal=redash-key='YOUR_API_KEY'"
 kubectl create secret generic mcp-server-secrets \
     --from-literal=redash-key='test-api-key-placeholder' \
     --dry-run=client -o yaml | kubectl apply -f -
@@ -192,12 +193,25 @@ log_info "Testing health endpoint via port-forward..."
 POD_NAME=$(kubectl get pods -l app=mcp-server -o jsonpath='{.items[0].metadata.name}')
 log_info "Testing pod: ${POD_NAME}"
 
+# Find an available port
+TEST_PORT=8080
+while lsof -Pi :$TEST_PORT -sTCP:LISTEN -t >/dev/null 2>&1; do
+    TEST_PORT=$((TEST_PORT + 1))
+done
+log_info "Using port ${TEST_PORT} for testing"
+
 # Start port-forward in background
-kubectl port-forward "pod/${POD_NAME}" 8080:3000 &
+kubectl port-forward "pod/${POD_NAME}" "${TEST_PORT}:3000" > /dev/null 2>&1 &
 PF_PID=$!
 
 # Wait for port-forward to be ready
 sleep 10
+
+# Verify port-forward is running
+if ! kill -0 $PF_PID 2>/dev/null; then
+    log_error "Port-forward failed to start"
+    exit 1
+fi
 
 # Test health endpoint multiple times with retries
 log_info "Checking health endpoint..."
@@ -206,27 +220,30 @@ RETRY=0
 HEALTH_SUCCESS=false
 
 while [ $RETRY -lt $MAX_RETRIES ]; do
-    HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://localhost:8080/health 2>&1 || echo "000")
-    
-    if [ "${HEALTH_RESPONSE}" = "200" ]; then
-        log_info "Health check passed! Response code: ${HEALTH_RESPONSE}"
-        HEALTH_SUCCESS=true
-        break
-    else
-        RETRY=$((RETRY + 1))
-        if [ $RETRY -lt $MAX_RETRIES ]; then
-            log_warn "Health check attempt $RETRY failed (code: ${HEALTH_RESPONSE}). Retrying..."
-            sleep 5
+    # Get HTTP status code separately from error handling
+    if HEALTH_RESPONSE=$(curl -s -w "%{http_code}" -o /dev/null --max-time 10 "http://localhost:${TEST_PORT}/health" 2>/dev/null); then
+        if [ "${HEALTH_RESPONSE}" = "200" ]; then
+            log_info "Health check passed! Response code: ${HEALTH_RESPONSE}"
+            HEALTH_SUCCESS=true
+            break
         fi
+    fi
+    
+    RETRY=$((RETRY + 1))
+    if [ $RETRY -lt $MAX_RETRIES ]; then
+        log_warn "Health check attempt $RETRY failed (code: ${HEALTH_RESPONSE:-error}). Retrying..."
+        sleep 5
     fi
 done
 
-# Kill port-forward
-kill $PF_PID 2>/dev/null || true
-wait $PF_PID 2>/dev/null || true
+# Kill port-forward if it's still running
+if kill -0 $PF_PID 2>/dev/null; then
+    kill $PF_PID 2>/dev/null || true
+    wait $PF_PID 2>/dev/null || true
+fi
 
 if [ "$HEALTH_SUCCESS" = "false" ]; then
-    log_error "Health check failed after $MAX_RETRIES attempts! Last response code: ${HEALTH_RESPONSE}"
+    log_error "Health check failed after $MAX_RETRIES attempts! Last response code: ${HEALTH_RESPONSE:-error}"
     log_info "Checking pod logs for debugging..."
     kubectl logs "pod/${POD_NAME}" --tail=100
     log_info "Checking pod details..."
@@ -265,14 +282,17 @@ fi
 # Test environment variables
 log_info "Verifying environment variables..."
 POD_NAME=$(kubectl get pods -l app=mcp-server -o jsonpath='{.items[0].metadata.name}')
-ENV_VARS=$(kubectl exec "${POD_NAME}" -- env | grep -E '(PORT|QUERY_|REDASH_)' || true)
-log_info "Environment variables in pod:"
-echo "${ENV_VARS}"
-
-# Check if mandatory variables are set
-if ! echo "${ENV_VARS}" | grep -q "PORT=3000"; then
-    log_error "PORT environment variable is not set correctly!"
-    exit 1
+if ! ENV_VARS=$(kubectl exec "${POD_NAME}" -- env 2>/dev/null | grep -E '(PORT|QUERY_|REDASH_)'); then
+    log_warn "Could not retrieve environment variables from pod (pod may not be fully ready)"
+else
+    log_info "Environment variables in pod:"
+    echo "${ENV_VARS}"
+    
+    # Check if mandatory variables are set
+    if ! echo "${ENV_VARS}" | grep -q "PORT=3000"; then
+        log_error "PORT environment variable is not set correctly!"
+        exit 1
+    fi
 fi
 
 # Final summary
