@@ -109,7 +109,8 @@ kind load docker-image "${IMAGE_NAME}" --name "${CLUSTER_NAME}"
 
 # Update deployment to use the test image
 log_info "Creating temporary deployment manifest with test image..."
-TEMP_DEPLOYMENT=$(mktemp -m 600)
+TEMP_DEPLOYMENT=$(mktemp)
+chmod 600 "${TEMP_DEPLOYMENT}"
 sed "s|image: ghcr.io/jonico/redash-mcp-server:latest|image: ${IMAGE_NAME}|g" \
     k8s/deployment.yaml > "${TEMP_DEPLOYMENT}"
 
