@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-server-config
+  labels:
+    app: mcp-server
+data:
+  query-timeout-seconds: "60"
+  query-poll-ms: "2000"
+  # query-max-age-seconds: "3600"  # Uncomment and set if you want to use cached results
+

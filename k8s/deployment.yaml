@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-server
+  labels:
+    app: mcp-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mcp-server
+  template:
+    metadata:
+      labels:
+        app: mcp-server
+    spec:
+      containers:
+      - name: mcp-server
+        image: ghcr.io/jonico/mcp-server:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        - name: PORT
+          value: "3000"
+        - name: QUERY_TIMEOUT_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-server-config
+              key: query-timeout-seconds
+        - name: QUERY_POLL_MS
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-server-config
+              key: query-poll-ms
+        - name: QUERY_MAX_AGE_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-server-config
+              key: query-max-age-seconds
+              optional: true
+        - name: REDASH_KEY
+          valueFrom:
+            secretKeyRef:
+              name: mcp-server-secrets
+              key: redash-key
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
