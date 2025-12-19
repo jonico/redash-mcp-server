@@ -1,0 +1,65 @@
+# Default values for redash-mcp-server
+image:
+  registry: ""  # ECR registry URL (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com)
+  repository: redash-mcp-server
+  tag: "0.1"
+  pullPolicy: IfNotPresent
+  # Alternative: Use GHCR
+  # registry: ghcr.io
+  # repository: jonico/redash-mcp-server
+
+# Image pull secrets (required for ECR)
+imagePullSecrets: []
+
+# Deployment configuration
+replicaCount: 2
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+# Application port
+app:
+  port: 3000
+
+# Resource limits
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 3000
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Ingress configuration (optional)
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: redash-mcp-server.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
