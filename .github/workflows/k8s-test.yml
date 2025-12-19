@@ -1,0 +1,67 @@
+name: Test Kubernetes Deployment
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'k8s/**'
+      - 'Dockerfile'
+      - 'src/**'
+      - '.github/workflows/k8s-test.yml'
+  workflow_dispatch:
+
+jobs:
+  test-k8s-deployment:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install kind
+        run: |
+          # kind is already installed in GitHub Actions runners
+          kind version
+
+      - name: Install kubectl
+        run: |
+          # kubectl is already installed in GitHub Actions runners
+          kubectl version --client
+
+      - name: Run Kubernetes deployment tests
+        run: |
+          cd k8s
+          chmod +x test-deployment.sh
+          ./test-deployment.sh
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8s-test-artifacts
+          path: |
+            /tmp/tmp.*
+            ${{ github.workspace }}/k8s/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+      
+      - name: Capture kind logs on failure
+        if: failure()
+        run: |
+          kind export logs /tmp/kind-logs || true
+          
+      - name: Upload kind logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kind-logs
+          path: /tmp/kind-logs
+          if-no-files-found: ignore
+          retention-days: 7
