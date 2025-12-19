@@ -16,7 +16,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: jonico
-  IMAGE_NAME: mcp-server
+  IMAGE_NAME: redash-mcp-server
 
 jobs:
   build-and-push:
