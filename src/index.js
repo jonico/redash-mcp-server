@@ -9,11 +9,11 @@ import { URL } from 'url';
 // In HTTP mode, redashApiKey, timeout config, and query ID are passed from headers
 // In stdio mode, they come from environment variables
 async function getDataHandler({ org, redashApiKey, timeoutSeconds, pollMs, maxAgeSeconds, queryId }) {
-    const baseUrl = 'https://redash.postmanlabs.com';
+        const baseUrl = 'https://redash.postmanlabs.com';
     const apiKey = redashApiKey || process.env.REDASH_KEY;
-    if (!apiKey) {
+        if (!apiKey) {
         throw new Error('REDASH_KEY env var or Authorization header is required');
-    }
+        }
 
     // Use header values if provided, otherwise fall back to environment variables
     const timeoutMs = parseInt(timeoutSeconds || process.env.QUERY_TIMEOUT_SECONDS || '60') * 1000; // total time budget
@@ -22,84 +22,84 @@ async function getDataHandler({ org, redashApiKey, timeoutSeconds, pollMs, maxAg
         ? parseInt(maxAgeSeconds)
         : (process.env.QUERY_MAX_AGE_SECONDS ? parseInt(process.env.QUERY_MAX_AGE_SECONDS) : undefined); // omit to accept any cached age
 
-    const started = Date.now();
+        const started = Date.now();
 
-    // Helper: sleep
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        // Helper: sleep
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-    // Helper: poll job until done or timeout. Returns query_result_id
-    const pollJobUntilDone = async (jobId) => {
-        while (Date.now() - started < timeoutMs) {
+        // Helper: poll job until done or timeout. Returns query_result_id
+        const pollJobUntilDone = async (jobId) => {
+            while (Date.now() - started < timeoutMs) {
                 const jobRes = await fetch(`${baseUrl}/api/jobs/${encodeURIComponent(jobId)}`, {
                     method: 'GET',
                     headers: { Authorization: 'Key ' + apiKey }
                 });
 
-            if (!jobRes.ok) {
-                const t = await jobRes.text();
-                throw new Error(`Failed to poll job ${jobId}: ${jobRes.status} ${jobRes.statusText} - ${t}`);
-            }
-
-            const jobJson = await jobRes.json();
-            const status = jobJson?.job?.status; // 1 queued, 2 processing, 3 done, 4 failed
-
-            if (status === 3) {
-                const qrid = jobJson?.job?.result?.query_result_id || jobJson?.job?.query_result_id;
-                if (!qrid) {
-                    throw new Error(`Job ${jobId} completed but no query_result_id in response`);
+                if (!jobRes.ok) {
+                    const t = await jobRes.text();
+                    throw new Error(`Failed to poll job ${jobId}: ${jobRes.status} ${jobRes.statusText} - ${t}`);
                 }
-                return qrid;
+
+                const jobJson = await jobRes.json();
+                const status = jobJson?.job?.status; // 1 queued, 2 processing, 3 done, 4 failed
+
+                if (status === 3) {
+                    const qrid = jobJson?.job?.result?.query_result_id || jobJson?.job?.query_result_id;
+                    if (!qrid) {
+                        throw new Error(`Job ${jobId} completed but no query_result_id in response`);
+                    }
+                    return qrid;
+                }
+
+                if (status === 4) {
+                    const err = jobJson?.job?.error || 'Unknown Redash job failure';
+                    throw new Error(`Redash job ${jobId} failed: ${err}`);
+                }
+
+                await sleep(pollDelayMs);
             }
 
-            if (status === 4) {
-                const err = jobJson?.job?.error || 'Unknown Redash job failure';
-                throw new Error(`Redash job ${jobId} failed: ${err}`);
-            }
+            throw new Error(`Timed out waiting for Redash job ${jobId} after ${Math.round(timeoutMs / 1000)}s`);
+        };
 
-            await sleep(pollDelayMs);
-        }
-
-        throw new Error(`Timed out waiting for Redash job ${jobId} after ${Math.round(timeoutMs / 1000)}s`);
-    };
-
-    // Step 1: POST results request (always; supports params and cache)
-    const postBody = {
-        parameters: { org },
-        ...(typeof maxAge === 'number' ? { max_age: maxAge } : {})
-    };
+        // Step 1: POST results request (always; supports params and cache)
+        const postBody = {
+            parameters: { org },
+            ...(typeof maxAge === 'number' ? { max_age: maxAge } : {})
+        };
 
     // Use queryId from parameter, or fall back to environment variable, or default to 35173
     const queryIdToUse = queryId || process.env.REDASH_QUERY_ID || '35173';
     
     const res = await fetch(`${baseUrl}/api/queries/${queryIdToUse}/results`, {
-        method: 'POST',
-        headers: {
-            Authorization: 'Key ' + apiKey,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(postBody)
-    });
+            method: 'POST',
+            headers: {
+                Authorization: 'Key ' + apiKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(postBody)
+        });
 
-    if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`Failed to request Redash results: ${res.status} ${res.statusText} - ${t}`);
-    }
+        if (!res.ok) {
+            const t = await res.text();
+            throw new Error(`Failed to request Redash results: ${res.status} ${res.statusText} - ${t}`);
+        }
 
-    const json = await res.json();
+        const json = await res.json();
 
-    // If cached or fresh results are returned immediately, use them (even if empty rows)
-    if (json?.query_result) {
-        return { content: [{ type: 'text', text: JSON.stringify(json) }] };
-    }
+        // If cached or fresh results are returned immediately, use them (even if empty rows)
+        if (json?.query_result) {
+            return { content: [{ type: 'text', text: JSON.stringify(json) }] };
+        }
 
-    // Otherwise, a job was likely returned. Poll until done, then fetch the query_result by id
-    const jobId = json?.job?.id || json?.job?.job_id || json?.id; // be defensive
-    if (!jobId) {
-        // Surface original payload for debugging
-        throw new Error(`Unexpected Redash response (no query_result or job): ${JSON.stringify(json)}`);
-    }
+        // Otherwise, a job was likely returned. Poll until done, then fetch the query_result by id
+        const jobId = json?.job?.id || json?.job?.job_id || json?.id; // be defensive
+        if (!jobId) {
+            // Surface original payload for debugging
+            throw new Error(`Unexpected Redash response (no query_result or job): ${JSON.stringify(json)}`);
+        }
 
-    const queryResultId = await pollJobUntilDone(jobId);
+        const queryResultId = await pollJobUntilDone(jobId);
 
         // Fetch the completed query result
         const qRes = await fetch(`${baseUrl}/api/query_results/${encodeURIComponent(queryResultId)}.json`, {
@@ -107,14 +107,14 @@ async function getDataHandler({ org, redashApiKey, timeoutSeconds, pollMs, maxAg
             headers: { Authorization: 'Key ' + apiKey }
         });
 
-    if (!qRes.ok) {
-        const t = await qRes.text();
-        throw new Error(`Failed to fetch query_results/${queryResultId}: ${qRes.status} ${qRes.statusText} - ${t}`);
-    }
+        if (!qRes.ok) {
+            const t = await qRes.text();
+            throw new Error(`Failed to fetch query_results/${queryResultId}: ${qRes.status} ${qRes.statusText} - ${t}`);
+        }
 
-    const qJson = await qRes.json();
-    return { content: [{ type: 'text', text: JSON.stringify(qJson) }] };
-}
+        const qJson = await qRes.json();
+        return { content: [{ type: 'text', text: JSON.stringify(qJson) }] };
+    }
 
 // Determine mode from command line arguments
 const args = process.argv.slice(2);
@@ -170,7 +170,7 @@ if (useHttpMode) {
         // Handle health check endpoint
         if (req.method === 'GET' && url.pathname === '/health') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ status: 'ok', service: 'mcp-server' }));
+            res.end(JSON.stringify({ status: 'ok', service: 'redash-mcp-server' }));
             return;
         }
 
@@ -358,7 +358,7 @@ if (useHttpMode) {
         getDataHandler
     );
 
-    // Start receiving messages on stdin and sending messages on stdout
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+// Start receiving messages on stdin and sending messages on stdout
+const transport = new StdioServerTransport();
+await server.connect(transport);
 }
