@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: mcp-server
-        image: ghcr.io/jonico/mcp-server:latest
+        image: ghcr.io/jonico/redash-mcp-server:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000

@@ -18,11 +18,11 @@ This directory contains Kubernetes manifests for deploying the MCP server.
 ## Deployment Steps
 
 1. **Use the pre-built Docker image from GitHub Container Registry:**
-   The image is automatically built and pushed to `ghcr.io/jonico/mcp-server:latest` via GitHub Actions on every push to main/master branch.
+   The image is automatically built and pushed to `ghcr.io/jonico/redash-mcp-server:latest` via GitHub Actions on every push to main/master branch.
    
    The `deployment.yaml` is already configured to use this image. If you need a specific version:
    ```yaml
-   image: ghcr.io/jonico/mcp-server:v1.0.0
+   image: ghcr.io/jonico/redash-mcp-server:v1.0.0
    ```
 
    **Note**: If the image is private, you may need to configure image pull secrets:
@@ -42,8 +42,8 @@ This directory contains Kubernetes manifests for deploying the MCP server.
 
    **To build and push manually (if needed):**
    ```bash
-   docker build -t ghcr.io/jonico/mcp-server:latest .
-   docker push ghcr.io/jonico/mcp-server:latest
+   docker build -t ghcr.io/jonico/redash-mcp-server:latest .
+   docker push ghcr.io/jonico/redash-mcp-server:latest
    ```
 
 3. **Create the secret with your Redash API key:**
@@ -183,10 +183,10 @@ curl http://localhost:8080/health
 ## Image Registry
 
 The Docker image is published to GitHub Container Registry:
-- **Image**: `ghcr.io/jonico/mcp-server:latest`
+- **Image**: `ghcr.io/jonico/redash-mcp-server:latest`
 - **Registry**: GitHub Container Registry (ghcr.io)
 - **Owner**: jonico (personal organization)
 - **Automated builds**: Images are automatically built and pushed via GitHub Actions on every push to main/master branch
 
-To view available image tags, visit: https://github.com/users/jonico/packages/container/mcp-server/versions
+To view available image tags, visit: https://github.com/users/jonico/packages/container/redash-mcp-server/versions
 
