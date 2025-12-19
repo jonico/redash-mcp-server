@@ -180,6 +180,61 @@ kubectl port-forward svc/mcp-server 8080:80
 curl http://localhost:8080/health
 ```
 
+## Testing the Deployment
+
+A comprehensive test script is provided to validate the Kubernetes deployment using kind (Kubernetes IN Docker):
+
+```bash
+# Run the test script
+./test-deployment.sh
+```
+
+### What the Test Script Does
+
+The `test-deployment.sh` script performs the following automated tests:
+
+1. **Prerequisites Check**: Verifies that `docker`, `kubectl`, and `kind` are installed
+2. **Cluster Creation**: Creates a temporary kind cluster for testing
+3. **Image Handling**: 
+   - Attempts to build the Docker image locally
+   - Falls back to pulling from GitHub Container Registry if build fails
+4. **Deployment**: Applies all Kubernetes manifests (ConfigMap, Secret, Deployment, Service)
+5. **Health Verification**: 
+   - Waits for pods to be running
+   - Tests the health endpoint via port-forward
+   - Verifies resource limits and health probes
+   - Checks environment variables
+6. **Cleanup**: Automatically deletes the kind cluster after tests complete
+
+### Test Requirements
+
+- Docker (for building images and running kind)
+- kubectl (for Kubernetes cluster interaction)
+- kind (for creating test clusters)
+- curl (for health check testing)
+
+All of these tools are typically pre-installed in CI/CD environments.
+
+### Running Tests in CI/CD
+
+The test script is designed to work in CI/CD pipelines. It handles:
+- Network issues with retry logic
+- Automatic fallback to pre-built images
+- Clean exit codes (0 for success, 1 for failure)
+- Comprehensive logging and error reporting
+
+### Test Output
+
+The script provides colored output with detailed information about each test step:
+- ✅ Green for successful operations
+- ⚠️ Yellow for warnings
+- ❌ Red for errors
+
+At the end of successful tests, you'll see a summary including:
+- Cluster name and image used
+- Number of running replicas
+- Status of all verification checks
+
 ## Image Registry
 
 The Docker image is published to GitHub Container Registry:
