@@ -48,5 +48,20 @@ jobs:
           name: k8s-test-artifacts
           path: |
             /tmp/tmp.*
+            ${{ github.workspace }}/k8s/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+      
+      - name: Capture kind logs on failure
+        if: failure()
+        run: |
+          kind export logs /tmp/kind-logs || true
+          
+      - name: Upload kind logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kind-logs
+          path: /tmp/kind-logs
           if-no-files-found: ignore
           retention-days: 7
